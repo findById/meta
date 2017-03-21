@@ -8,7 +8,6 @@ import (
 	"io"
 	"bufio"
 	"encoding/binary"
-	"meta/mq-server/handler"
 	m "github.com/surgemq/message"
 )
 
@@ -37,7 +36,7 @@ func (this *MQServer) Start(uri string) {
 	}
 	this.listener, _ = net.ListenTCP(u.Scheme, addr);
 	defer this.listener.Close();
-	log.Println("broker started on:", uri);
+	log.Println("Accepting connections at:", uri);
 	for {
 		conn, err := this.listener.AcceptTCP();
 		if (err != nil) {
@@ -65,9 +64,8 @@ func (this *MQServer) handleConnection(conn *net.TCPConn) {
 	this.cm.AddClient(client);
 	// conn.SetDeadline(time.Now().Add(time.Second * 100))
 
-	go handler.NewAccessHandler(client.Id, this.cm).HandleMessage(conn);
-	go this.push(client);
 	go this.process(client);
+	go this.push(client);
 
 	this.handleReceive(client);
 }
@@ -80,95 +78,108 @@ func (this *MQServer) process(client *client.MQClient) {
 	for {
 		select {
 		case msg := <-client.InChan:
+			log.Println("receive", msg)
 			switch msg.Type() {
 			case m.CONNECT:
-				rm := msg.(*m.ConnectMessage)
-				log.Println("receive", rm)
 				ack := m.NewConnackMessage()
 				ack.SetReturnCode(m.ConnectionAccepted)
-				ack.SetSessionPresent(true)
 				client.OutChan <- ack
-				break;
+			case m.SUBSCRIBE:
+				ack := m.NewSubackMessage()
+				ack.SetPacketId(msg.PacketId())
+				ack.AddReturnCode(m.QosAtMostOnce)
+				client.OutChan <- ack
+			case m.PINGREQ:
+				ack := m.NewPingrespMessage()
+				ack.SetPacketId(msg.PacketId())
+				client.OutChan <- ack
 			case m.PUBLISH:
-				rm := msg.(*m.PublishMessage)
-
-				for _, c := range this.cm.CloneMap() {
-					for topic := range c.Topics {
-						log.Println(topic);
-					}
-					c.OutChan <- rm;
-				}
-				break;
+				pMsg := msg.(*m.PublishMessage)
+				log.Println("PAYLOAD", string(pMsg.Payload()))
+				ack := m.NewPubackMessage()
+				ack.SetPacketId(msg.PacketId())
+				client.OutChan <- ack
 			}
 		}
 	}
 }
 
 func (this *MQServer) handleReceive(client *client.MQClient) {
-	b, err := client.Br.Peek(1)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	t := m.MessageType(b[0] >> 4)
-	msg, err := t.New()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	n := 2
-	buf, err := client.Br.Peek(n)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	for buf[n-1] >= 0x80 {
-		n++
-		buf, err = client.Br.Peek(n)
+	for {
+		b, err := client.Br.Peek(1)
 		if err != nil {
-			log.Println(err)
+			if err == io.EOF {
+				continue
+			}
+			log.Println("peek type", err)
 			return
 		}
+		t := m.MessageType(b[0] >> 4)
+		msg, err := t.New()
+		if err != nil {
+			log.Println("create message", err)
+			return
+		}
+		n := 2
+		buf, err := client.Br.Peek(n)
+		if err != nil {
+			log.Println("peek header", err)
+			return
+		}
+		for buf[n-1] >= 0x80 {
+			n++
+			buf, err = client.Br.Peek(n)
+			if err != nil {
+				log.Println("try peek header", err)
+				return
+			}
+		}
+		l, r := binary.Uvarint(buf[1:])
+		buf = make([]byte, int(l)+r+1)
+		n, err = io.ReadFull(client.Br, buf)
+		if err != nil {
+			log.Println("read header", err)
+			return
+		}
+		if n != len(buf) {
+			log.Println("short read.")
+			return
+		}
+		_, err = msg.Decode(buf)
+		if err != nil {
+			log.Println("decode", err)
+			return
+		}
+		client.InChan <- msg
 	}
-	l, r := binary.Uvarint(buf[1:])
-	buf = make([]byte, int(l)+r+1)
-	n, err = io.ReadFull(client.Br, buf)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	if n != len(buf) {
-		log.Println("short read.")
-		return
-	}
-	_, err = msg.Decode(buf)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	client.InChan <- msg
 }
 
 func (this *MQServer) push(client *client.MQClient) {
 	for {
 		select {
 		case msg := <-client.OutChan:
-			{
-				buf := make([]byte, msg.Len())
-				n, err := msg.Encode(buf)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				if n != len(buf) {
-					log.Println("short encode.")
-					continue
-				}
-				_, err = client.Conn.Write(buf);
-				if err != nil {
-					this.cm.RemoveClient(client.Id);
-				}
-				break;
+			log.Println("send", msg)
+			buf := make([]byte, msg.Len())
+			n, err := msg.Encode(buf)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			if n != len(buf) {
+				log.Println("short encode.")
+				continue
+			}
+			n, err = client.Bw.Write(buf)
+			if err != nil {
+				return
+			}
+			if n != len(buf) {
+				log.Println("short write")
+				return
+			}
+			err = client.Bw.Flush()
+			if err != nil {
+				return
 			}
 		}
 	}

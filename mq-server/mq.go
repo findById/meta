@@ -10,7 +10,7 @@ var (
 )
 
 func main() {
-	flag.StringVar(&host, "host", "tcp://0.0.0.0:8081", "broker host");
+	flag.StringVar(&host, "host", "tcp://0.0.0.0:1883", "broker host");
 	flag.Parse();
 	if host == "" {
 		flag.PrintDefaults();
