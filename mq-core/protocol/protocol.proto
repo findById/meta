@@ -1,0 +1,23 @@
+// syntax = "proto3";
+
+package protocol;
+
+// 心跳
+message HeartBeat{
+    required int64 version  = 1;
+}
+
+// 消息头
+message Header{
+    required string id = 1; // 消息Id
+    required string topic = 2; // 消息主题
+    required string msgType = 3; // 消息类型
+    required bool commit = 4; // 本消息是否提交
+    optional int64 createTime = 5; //消息生成时间
+}
+
+// 消息
+message Message{
+    required Header  header= 1; // 消息头
+    required bytes payload = 2; // 有效载荷
+}
