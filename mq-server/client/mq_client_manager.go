@@ -49,6 +49,9 @@ func (this *ClientManager) CloneMap() []*MQClient {
 	clone := make([]*MQClient, len(this.ConnMap))
 	i := 0;
 	for _, v := range this.ConnMap {
+		if v.IsClosed {
+			continue;
+		}
 		clone[i] = v;
 		i++;
 	}

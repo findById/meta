@@ -5,6 +5,7 @@ import (
 	"log"
 	"meta/mq-server/client"
 	"net/url"
+	packet "github.com/surgemq/message"
 )
 
 type MQServer struct {
@@ -48,7 +49,13 @@ func (this *MQServer) Stop() {
 }
 
 func (this *MQServer) handleConnection(conn *net.TCPConn) {
-	client := client.NewMetaClient(conn);
+	client := client.NewMetaClient(conn, func(c *client.MQClient, packet packet.Message) {
+		for _, i := range this.cm.CloneMap() {
+			if i != nil && !i.IsClosed {
+				i.OutChan <- packet;
+			}
+		}
+	});
 	client.Start();
 	this.cm.AddClient(client);
 }

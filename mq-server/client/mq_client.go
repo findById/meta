@@ -10,21 +10,24 @@ import (
 )
 
 type MQClient struct {
-	Id      string
-	Conn    *net.TCPConn
-	Topics  []string
+	Id       string
+	Conn     *net.TCPConn
+	Topics   []string
 
-	Br      *bufio.Reader
-	Bw      *bufio.Writer
-	InChan  chan (packet.Message)
-	OutChan chan (packet.Message)
+	Br       *bufio.Reader
+	Bw       *bufio.Writer
+	InChan   chan (packet.Message)
+	OutChan  chan (packet.Message)
+
+	dispatcher func(c *MQClient, packet packet.Message)
+	IsClosed bool
 }
 
 func (this *MQClient) Close() {
 	this.Conn.Close();
 }
 
-func NewMetaClient(conn *net.TCPConn) *MQClient {
+func NewMetaClient(conn *net.TCPConn, dispatcher func(c *MQClient, packet packet.Message)) *MQClient {
 	client := &MQClient{
 		Id:conn.RemoteAddr().String(),
 		Conn:conn,
@@ -32,6 +35,8 @@ func NewMetaClient(conn *net.TCPConn) *MQClient {
 		Bw:bufio.NewWriter(conn),
 		InChan:make(chan (packet.Message), 1000),
 		OutChan:make(chan (packet.Message), 1000),
+		dispatcher:dispatcher,
+		IsClosed:false,
 	}
 	return client;
 }
@@ -77,9 +82,13 @@ func (this *MQClient) process() {
 				data := msg.(*packet.PublishMessage)
 				log.Println("payload:", string(data.Payload()))
 
+				this.dispatcher(this, msg);
+
 				ack := packet.NewPubackMessage()
 				ack.SetPacketId(msg.PacketId())
 				this.OutChan <- ack
+				break;
+			case packet.PUBACK:
 				break;
 			case packet.PINGREQ:
 
@@ -88,10 +97,10 @@ func (this *MQClient) process() {
 				this.OutChan <- ack
 				break;
 			case packet.DISCONNECT:
-
+				this.IsClosed = true;
 				break;
 			default:
-				log.Println("unsupported type");
+				log.Println("unimplemented message type");
 				break
 			}
 		}
@@ -106,18 +115,21 @@ func (this *MQClient) ReadPacket() {
 				continue
 			}
 			log.Println("peek type", err)
+			this.IsClosed = true;
 			return
 		}
 		t := packet.MessageType(b[0] >> 4)
 		msg, err := t.New()
 		if err != nil {
 			log.Println("create message", err)
+			this.IsClosed = true;
 			return
 		}
 		n := 2
 		buf, err := this.Br.Peek(n)
 		if err != nil {
 			log.Println("peek header", err)
+			this.IsClosed = true;
 			return
 		}
 		for buf[n - 1] >= 0x80 {
@@ -125,6 +137,7 @@ func (this *MQClient) ReadPacket() {
 			buf, err = this.Br.Peek(n)
 			if err != nil {
 				log.Println("try peek header", err)
+				this.IsClosed = true;
 				return
 			}
 		}
@@ -133,15 +146,18 @@ func (this *MQClient) ReadPacket() {
 		n, err = io.ReadFull(this.Br, buf)
 		if err != nil {
 			log.Println("read header", err)
+			this.IsClosed = true;
 			return
 		}
 		if n != len(buf) {
 			log.Println("short read.")
+			this.IsClosed = true;
 			return
 		}
 		_, err = msg.Decode(buf)
 		if err != nil {
 			log.Println("decode", err)
+			this.IsClosed = true;
 			return
 		}
 		this.InChan <- msg
@@ -165,14 +181,17 @@ func (this *MQClient) WritePacket() {
 			}
 			n, err = this.Bw.Write(buf)
 			if err != nil {
+				this.IsClosed = true;
 				return
 			}
 			if n != len(buf) {
 				log.Println("short write")
+				this.IsClosed = true;
 				return
 			}
 			err = this.Bw.Flush()
 			if err != nil {
+				this.IsClosed = true;
 				return
 			}
 		}
