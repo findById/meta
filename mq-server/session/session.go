@@ -32,7 +32,7 @@ func (this *Session) Write() {
 
 }
 
-func (this *Session) IsClosed() {
+func (this *Session) IsClosed() bool {
 	return this.isClosed;
 }
 
