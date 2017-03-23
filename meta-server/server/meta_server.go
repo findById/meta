@@ -2,7 +2,7 @@ package server
 
 import (
 	"log"
-	"meta/mq-server/client"
+	"meta/meta-server/client"
 	"net"
 	"net/url"
 
@@ -50,7 +50,7 @@ func (this *MQServer) Stop() {
 }
 
 func (this *MQServer) handleConnection(conn *net.TCPConn) {
-	client := client.NewMetaClient(conn, func(producer *client.MQClient, message packet.Message) {
+	client := client.NewMetaClient(conn, func(producer *client.MetaClient, message packet.Message) {
 		msg := message.(*packet.PublishMessage)
 		for _, consumer := range this.cm.CloneMap() {
 			if consumer == nil || consumer.IsClosed {

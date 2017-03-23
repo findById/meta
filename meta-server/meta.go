@@ -1,7 +1,7 @@
 package main
 
 import (
-	"meta/mq-server/server"
+	"meta/meta-server/server"
 	"flag"
 )
 

@@ -11,27 +11,27 @@ import (
 	packet "github.com/surgemq/message"
 )
 
-type MQClient struct {
-	Id     string
-	Conn   *net.TCPConn
-	Topics []string
+type MetaClient struct {
+	Id         string
+	Conn       *net.TCPConn
+	Topics     []string
 
-	Br      *bufio.Reader
-	Bw      *bufio.Writer
-	InChan  chan (packet.Message)
-	OutChan chan (packet.Message)
+	Br         *bufio.Reader
+	Bw         *bufio.Writer
+	InChan     chan (packet.Message)
+	OutChan    chan (packet.Message)
 
-	dispatcher func(producer *MQClient, packet packet.Message)
+	dispatcher func(producer *MetaClient, packet packet.Message)
 	IsClosed   bool
 }
 
-func (this *MQClient) Close() {
+func (this *MetaClient) Close() {
 	this.IsClosed = true
 	this.Conn.Close()
 }
 
-func NewMetaClient(conn *net.TCPConn, dispatcher func(producer *MQClient, packet packet.Message)) *MQClient {
-	client := &MQClient{
+func NewMetaClient(conn *net.TCPConn, dispatcher func(producer *MetaClient, packet packet.Message)) *MetaClient {
+	client := &MetaClient{
 		Id:         conn.RemoteAddr().String(),
 		Conn:       conn,
 		Topics:     make([]string, 0),
@@ -45,20 +45,20 @@ func NewMetaClient(conn *net.TCPConn, dispatcher func(producer *MQClient, packet
 	return client
 }
 
-func (this *MQClient) Start() {
+func (this *MetaClient) Start() {
 	go this.process()
 	go this.WritePacket()
 	go this.ReadPacket()
 }
 
-func (this *MQClient) process() {
+func (this *MetaClient) process() {
 	for {
 		if this.IsClosed {
 			return
 		}
 		select {
 		case msg := <-this.InChan:
-			// log.Println("receive", msg)
+		// log.Println("receive", msg)
 			switch msg.Type() {
 			case packet.CONNECT:
 				data := msg.(*packet.ConnectMessage)
@@ -155,7 +155,7 @@ func (this *MQClient) process() {
 	}
 }
 
-func (this *MQClient) ReadPacket() {
+func (this *MetaClient) ReadPacket() {
 	for {
 		if this.IsClosed {
 			return
@@ -183,7 +183,7 @@ func (this *MQClient) ReadPacket() {
 			this.Close()
 			return
 		}
-		for buf[n-1] >= 0x80 {
+		for buf[n - 1] >= 0x80 {
 			n++
 			buf, err = this.Br.Peek(n)
 			if err != nil {
@@ -193,7 +193,7 @@ func (this *MQClient) ReadPacket() {
 			}
 		}
 		l, r := binary.Uvarint(buf[1:])
-		buf = make([]byte, int(l)+r+1)
+		buf = make([]byte, int(l) + r + 1)
 		n, err = io.ReadFull(this.Br, buf)
 		if err != nil {
 			log.Println("read header", err)
@@ -215,14 +215,14 @@ func (this *MQClient) ReadPacket() {
 	}
 }
 
-func (this *MQClient) WritePacket() {
+func (this *MetaClient) WritePacket() {
 	for {
 		if this.IsClosed {
 			return
 		}
 		select {
 		case msg := <-this.OutChan:
-			// log.Println("send", msg)
+		// log.Println("send", msg)
 			buf := make([]byte, msg.Len())
 			n, err := msg.Encode(buf)
 			if err != nil {

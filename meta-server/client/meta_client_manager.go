@@ -3,18 +3,18 @@ package client
 import "sync"
 
 type ClientManager struct {
-	ConnMap map[string]*MQClient
+	ConnMap map[string]*MetaClient
 	Lock    sync.RWMutex
 }
 
 func NewClientManager() *ClientManager {
 	cm := &ClientManager{
-		ConnMap: make(map[string]*MQClient),
+		ConnMap: make(map[string]*MetaClient),
 	}
 	return cm
 }
 
-func (this *ClientManager) AddClient(client *MQClient) {
+func (this *ClientManager) AddClient(client *MetaClient) {
 	this.Lock.Lock()
 	// defer this.Lock.Unlock();
 	c, ok := this.ConnMap[client.Id]
@@ -37,7 +37,7 @@ func (this *ClientManager) RemoveClient(id string) {
 	this.Lock.Unlock()
 }
 
-func (this *ClientManager) GetClient(id string) *MQClient {
+func (this *ClientManager) GetClient(id string) *MetaClient {
 	this.Lock.RLock()
 	defer this.Lock.RUnlock()
 	return this.ConnMap[id]
@@ -47,12 +47,12 @@ func (this *ClientManager) Size() int {
 	return len(this.ConnMap)
 }
 
-func (this *ClientManager) CloneMap() []*MQClient {
+func (this *ClientManager) CloneMap() []*MetaClient {
 	this.Lock.RLock()
 	// defer this.Lock.RUnlock();
 	closedIds := make([]string, 0)
 
-	clone := make([]*MQClient, len(this.ConnMap))
+	clone := make([]*MetaClient, len(this.ConnMap))
 	i := 0
 	for _, v := range this.ConnMap {
 		if v.IsClosed {
