@@ -21,7 +21,7 @@ type MQClient struct {
 	InChan  chan (packet.Message)
 	OutChan chan (packet.Message)
 
-	dispatcher func(c *MQClient, packet packet.Message)
+	dispatcher func(producer *MQClient, packet packet.Message)
 	IsClosed   bool
 }
 
@@ -30,7 +30,7 @@ func (this *MQClient) Close() {
 	this.Conn.Close()
 }
 
-func NewMetaClient(conn *net.TCPConn, dispatcher func(c *MQClient, packet packet.Message)) *MQClient {
+func NewMetaClient(conn *net.TCPConn, dispatcher func(producer *MQClient, packet packet.Message)) *MQClient {
 	client := &MQClient{
 		Id:         conn.RemoteAddr().String(),
 		Conn:       conn,
@@ -53,6 +53,9 @@ func (this *MQClient) Start() {
 
 func (this *MQClient) process() {
 	for {
+		if this.IsClosed {
+			return
+		}
 		select {
 		case msg := <-this.InChan:
 			// log.Println("receive", msg)
@@ -70,13 +73,13 @@ func (this *MQClient) process() {
 				log.Println(data.String(), data.Qos())
 
 				for _, topic := range data.Topics() {
-					isNewTopic := false
+					subscribed := false
 					for _, temp := range this.Topics {
 						if temp == string(topic) {
-							isNewTopic = true
+							subscribed = true
 						}
 					}
-					if !isNewTopic {
+					if !subscribed {
 						this.Topics = append(this.Topics, string(topic))
 					}
 				}
@@ -90,24 +93,25 @@ func (this *MQClient) process() {
 			case packet.UNSUBSCRIBE:
 				data := msg.(*packet.UnsubscribeMessage)
 				log.Println(data.String())
-				del := make([]string, 0)
+
+				delTopics := make([]string, 0)
 				for _, topic := range data.Topics() {
 					for _, temp := range this.Topics {
 						if temp == string(topic) {
-							del = append(del, temp)
+							delTopics = append(delTopics, temp)
 						}
 					}
 				}
-				if len(del) > 0 {
+				if len(delTopics) > 0 {
 					newTopic := make([]string, 0)
 					for _, topic := range this.Topics {
-						ignored := false
-						for _, delTopic := range del {
-							if topic == delTopic {
-								ignored = true
+						unsubscribed := false
+						for _, del := range delTopics {
+							if topic == del {
+								unsubscribed = true
 							}
 						}
-						if !ignored {
+						if !unsubscribed {
 							newTopic = append(newTopic, topic)
 						}
 					}
@@ -120,8 +124,8 @@ func (this *MQClient) process() {
 				this.OutChan <- ack
 				break
 			case packet.PUBLISH:
-				//data := msg.(*packet.PublishMessage)
-				//log.Println("payload:", string(data.Payload()))
+				data := msg.(*packet.PublishMessage)
+				log.Println("payload:", this.Id, data.PacketId(), string(data.Payload()))
 
 				this.dispatcher(this, msg)
 
@@ -130,6 +134,8 @@ func (this *MQClient) process() {
 				this.OutChan <- ack
 				break
 			case packet.PUBACK:
+				data := msg.(*packet.PubackMessage)
+				log.Println("puback:", this.Id, data.PacketId())
 				break
 			case packet.PINGREQ:
 				this.Conn.SetDeadline(time.Now().Add(time.Second * 10))
@@ -151,6 +157,9 @@ func (this *MQClient) process() {
 
 func (this *MQClient) ReadPacket() {
 	for {
+		if this.IsClosed {
+			return
+		}
 		b, err := this.Br.Peek(1)
 		if err != nil {
 			if err == io.EOF {
@@ -208,6 +217,9 @@ func (this *MQClient) ReadPacket() {
 
 func (this *MQClient) WritePacket() {
 	for {
+		if this.IsClosed {
+			return
+		}
 		select {
 		case msg := <-this.OutChan:
 			// log.Println("send", msg)

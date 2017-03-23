@@ -50,14 +50,15 @@ func (this *MQServer) Stop() {
 }
 
 func (this *MQServer) handleConnection(conn *net.TCPConn) {
-	client := client.NewMetaClient(conn, func(c *client.MQClient, message packet.Message) {
+	client := client.NewMetaClient(conn, func(producer *client.MQClient, message packet.Message) {
 		msg := message.(*packet.PublishMessage)
-		for _, i := range this.cm.CloneMap() {
-			if i != nil && !i.IsClosed {
-				for _, topic := range i.Topics {
-					if topic == string(msg.Topic()) {
-						i.OutChan <- msg
-					}
+		for _, consumer := range this.cm.CloneMap() {
+			if consumer == nil || consumer.IsClosed {
+				continue
+			}
+			for _, topic := range consumer.Topics {
+				if topic == string(msg.Topic()) {
+					consumer.OutChan <- msg
 				}
 			}
 		}
