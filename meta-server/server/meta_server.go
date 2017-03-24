@@ -3,10 +3,10 @@ package server
 import (
 	"log"
 	"meta/meta-server/client"
+	"meta/meta-server/handler"
 	"net"
 	"net/url"
-
-	packet "github.com/surgemq/message"
+	"runtime"
 )
 
 type MQServer struct {
@@ -32,7 +32,10 @@ func (this *MQServer) Start(uri string) {
 	if err != nil {
 		panic(err)
 	}
-	this.listener, _ = net.ListenTCP(u.Scheme, addr)
+	this.listener, err = net.ListenTCP(u.Scheme, addr)
+	if err != nil {
+		panic(err)
+	}
 	defer this.listener.Close()
 	log.Println("Accepting connections at:", uri)
 	for {
@@ -40,7 +43,7 @@ func (this *MQServer) Start(uri string) {
 		if err != nil {
 			continue
 		}
-		log.Println("Handle connection ", conn.RemoteAddr().String(), this.cm.Size())
+		log.Println("Handle connection ", conn.RemoteAddr().String(), this.cm.Size(), runtime.NumGoroutine())
 		go this.handleConnection(conn)
 	}
 }
@@ -50,21 +53,8 @@ func (this *MQServer) Stop() {
 }
 
 func (this *MQServer) handleConnection(conn *net.TCPConn) {
-	client := client.NewMetaClient(conn, func(producer *client.MetaClient, message packet.Message) {
-		msg := message.(*packet.PublishMessage)
-		for _, consumer := range this.cm.CloneMap() {
-			if consumer == nil || consumer.IsClosed {
-				continue
-			}
-			for _, topic := range consumer.Topics {
-				if topic == string(msg.Topic()) {
-					consumer.OutChan <- msg
-				}
-			}
-		}
-	})
-	client.Start()
-	this.cm.AddClient(client)
+	h := handler.NewMQTTHandler(conn, this.cm)
+	h.Start()
 }
 
 func HeartBeat(conn net.TCPConn, timeout int) {

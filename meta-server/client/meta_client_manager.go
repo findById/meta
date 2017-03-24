@@ -70,7 +70,7 @@ func (this *ClientManager) CloneMap() []*MetaClient {
 }
 
 func (this *ClientManager) remove(ids []string) {
-	this.Lock.RLock()
+	this.Lock.Lock()
 	for _, id := range ids {
 		c, ok := this.ConnMap[id]
 		if ok {
@@ -78,5 +78,5 @@ func (this *ClientManager) remove(ids []string) {
 			delete(this.ConnMap, id)
 		}
 	}
-	this.Lock.RUnlock()
+	this.Lock.Unlock()
 }

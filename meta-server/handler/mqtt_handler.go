@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"meta/meta-server/client"
+
 	packet "github.com/surgemq/message"
 )
 
@@ -18,11 +19,11 @@ type MQTTHandler struct {
 }
 
 func NewMQTTHandler(conn *net.TCPConn, cm *client.ClientManager) *MQTTHandler {
-	client := client.NewMetaClient(conn, nil)
+	client := client.NewMetaClient(conn)
 	return &MQTTHandler{
-		cm:cm,
-		client:client,
-		OutChan:make(chan (packet.Message), 1000),
+		cm:      cm,
+		client:  client,
+		OutChan: make(chan (packet.Message), 1000),
 	}
 }
 
@@ -43,18 +44,23 @@ func (this *MQTTHandler) process() {
 				data := msg.(*packet.ConnectMessage)
 				log.Println(string(data.Username()), string(data.Password()), data.Version())
 
-				ack := packet.NewConnackMessage()
-
-				if string(data.Username()) != "" {
-					this.cm.AddClient(this.client)
-					ack.SetReturnCode(packet.ConnectionAccepted)
-				} else {
-					ack.SetReturnCode(packet.ErrBadUsernameOrPassword)
+				if string(data.Username()) == "" {
+					this.client.Close()
+					break
 				}
 
+				this.cm.AddClient(this.client)
+				this.client.IsAuthed = true
+
+				ack := packet.NewConnackMessage()
+				ack.SetReturnCode(packet.ConnectionAccepted)
 				this.client.OutChan <- ack
 				break
 			case packet.SUBSCRIBE:
+				if !this.client.IsAuthed {
+					this.client.Close()
+					break
+				}
 				data := msg.(*packet.SubscribeMessage)
 				log.Println(data.String(), data.Qos())
 
@@ -77,6 +83,10 @@ func (this *MQTTHandler) process() {
 				this.client.OutChan <- ack
 				break
 			case packet.UNSUBSCRIBE:
+				if !this.client.IsAuthed {
+					this.client.Close()
+					break
+				}
 				data := msg.(*packet.UnsubscribeMessage)
 				log.Println(data.String())
 
@@ -110,6 +120,10 @@ func (this *MQTTHandler) process() {
 				this.client.OutChan <- ack
 				break
 			case packet.PUBLISH:
+				if !this.client.IsAuthed {
+					this.client.Close()
+					break
+				}
 				data := msg.(*packet.PublishMessage)
 				log.Println("payload:", this.client.Id, data.PacketId(), string(data.Payload()))
 
@@ -120,10 +134,18 @@ func (this *MQTTHandler) process() {
 				this.client.OutChan <- ack
 				break
 			case packet.PUBACK:
+				if !this.client.IsAuthed {
+					this.client.Close()
+					break
+				}
 				data := msg.(*packet.PubackMessage)
 				log.Println("puback:", this.client.Id, data.PacketId())
 				break
 			case packet.PINGREQ:
+				if !this.client.IsAuthed {
+					this.client.Close()
+					break
+				}
 				this.client.Conn.SetDeadline(time.Now().Add(time.Second * 10))
 
 				ack := packet.NewPingrespMessage()
