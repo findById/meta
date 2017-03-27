@@ -50,7 +50,6 @@ func (this *MQTTHandler) process() {
 				}
 
 				this.client.Id = string(data.ClientId())
-				this.client.KeepAlive = data.KeepAlive()
 
 				this.cm.AddClient(this.client)
 				this.client.IsAuthed = true
@@ -149,7 +148,7 @@ func (this *MQTTHandler) process() {
 					this.client.Close()
 					break
 				}
-				this.client.Conn.SetDeadline(time.Now().Add(time.Second * 5).Add(time.Second * this.client.KeepAlive))
+				this.client.Conn.SetDeadline(time.Now().Add(time.Second * 60))
 
 				ack := packet.NewPingrespMessage()
 				ack.SetPacketId(msg.PacketId())

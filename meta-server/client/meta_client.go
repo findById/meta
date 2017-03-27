@@ -17,7 +17,6 @@ type MetaClient struct {
 	InChan    chan (packet.Message)
 	OutChan   chan (packet.Message)
 
-	KeepAlive int16
 	IsClosed  bool
 	IsAuthed  bool
 }
