@@ -9,20 +9,20 @@ import (
 	"runtime"
 )
 
-type MQServer struct {
+type MetaServer struct {
 	cm       *client.ClientManager
 	listener *net.TCPListener
 	limiter  string
 }
 
-func NewMQServer() *MQServer {
+func NewMetaServer() *MetaServer {
 	cm := client.NewClientManager()
-	return &MQServer{
+	return &MetaServer{
 		cm: cm,
 	}
 }
 
-func (this *MQServer) Start(uri string) {
+func (this *MetaServer) Start(uri string) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		panic(err)
@@ -48,11 +48,11 @@ func (this *MQServer) Start(uri string) {
 	}
 }
 
-func (this *MQServer) Stop() {
+func (this *MetaServer) Stop() {
 	this.listener.Close()
 }
 
-func (this *MQServer) handleConnection(conn *net.TCPConn) {
+func (this *MetaServer) handleConnection(conn *net.TCPConn) {
 	h := handler.NewMQTTHandler(conn, this.cm)
 	h.Start()
 }

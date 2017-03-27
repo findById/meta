@@ -17,6 +17,6 @@ func main() {
 		return
 	}
 
-	mq := server.NewMQServer();
+	mq := server.NewMetaServer();
 	mq.Start(host);
 }
