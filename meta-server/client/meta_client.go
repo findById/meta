@@ -8,17 +8,18 @@ import (
 )
 
 type MetaClient struct {
-	Id       string
-	Conn     *net.TCPConn
-	Topics   []string
+	Id        string
+	Conn      *net.TCPConn
+	Topics    []string
 
-	Br       *bufio.Reader
-	Bw       *bufio.Writer
-	InChan   chan (packet.Message)
-	OutChan  chan (packet.Message)
+	Br        *bufio.Reader
+	Bw        *bufio.Writer
+	InChan    chan (packet.Message)
+	OutChan   chan (packet.Message)
 
-	IsClosed bool
-	IsAuthed bool
+	KeepAlive int16
+	IsClosed  bool
+	IsAuthed  bool
 }
 
 func (this *MetaClient) Close() {
