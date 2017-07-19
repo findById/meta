@@ -128,7 +128,7 @@ func (this *MQTTHandler) process() {
 					break
 				}
 				data := msg.(*packet.PublishMessage)
-				log.Println("payload:", this.client.Id, data.PacketId(), string(data.Payload()))
+				log.Printf("publish >> producerId: %v, packetId: %v, topic: %v, payload: %v\n", this.client.Id, data.PacketId(), string(data.Topic()), string(data.Payload()))
 
 				this.OutChan <- msg
 
@@ -269,7 +269,7 @@ func (this *MQTTHandler) producer() {
 				}
 				for _, topic := range consumer.Topics {
 					if topic == string(data.Topic()) {
-						log.Println("producerId:", this.client.Id, "consumerId:", consumer.Id, "payload:", string(data.Payload()))
+						log.Printf("producerId: %v, consumerId: %v, topic: %v, payload: %v\n", this.client.Id, consumer.Id, topic, string(data.Payload()))
 						consumer.OutChan <- data
 					}
 				}
