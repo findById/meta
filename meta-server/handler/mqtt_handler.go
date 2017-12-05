@@ -13,17 +13,16 @@ import (
 )
 
 type MQTTHandler struct {
-	cm      *client.ClientManager
-	client  *client.MetaClient
-	OutChan chan (packet.Message)
+	clientManager *client.ClientManager
+	client        *client.MetaClient
+	OutChan       chan (packet.Message)
 }
 
-func NewMQTTHandler(conn *net.TCPConn, cm *client.ClientManager) *MQTTHandler {
-	client := client.NewMetaClient(conn)
+func NewMQTTHandler(conn *net.TCPConn, manager *client.ClientManager) *MQTTHandler {
 	return &MQTTHandler{
-		cm:      cm,
-		client:  client,
-		OutChan: make(chan (packet.Message), 1000),
+		clientManager: manager,
+		client:        client.NewMetaClient(conn),
+		OutChan:       make(chan (packet.Message), 1000),
 	}
 }
 
@@ -38,13 +37,14 @@ func (this *MQTTHandler) process() {
 	for this.client != nil && !this.client.IsClosed {
 		select {
 		case msg := <-this.client.InChan:
-		// log.Println("receive", msg)
+			// log.Println("receive", msg)
 			switch msg.Type() {
 			case packet.CONNECT:
 				data := msg.(*packet.ConnectMessage)
 				log.Println(string(data.Username()), string(data.Password()), data.Version())
 
-				if string(data.Username()) == "" {
+				// check permission
+				if !this.client.CheckAuthPermission(data.Username(), data.Password()) {
 					this.client.Close()
 					break
 				}
@@ -52,7 +52,7 @@ func (this *MQTTHandler) process() {
 				this.client.Id = string(data.ClientId())
 				//this.client.Conn.SetDeadline(time.Now().Add(time.Minute))
 
-				this.cm.AddClient(this.client)
+				this.clientManager.AddClient(this.client)
 				this.client.IsAuthed = true
 
 				ack := packet.NewConnackMessage()
@@ -68,6 +68,13 @@ func (this *MQTTHandler) process() {
 				// log.Println(data.String(), data.Qos())
 
 				for _, topic := range data.Topics() {
+					// check topic permission
+					if !this.client.CheckTopicPermission(string(topic), "subscribe") {
+						log.Printf("check topic permission failed: subscribe %v", this.client.Id)
+						this.client.Close()
+						return
+					}
+
 					subscribed := false
 					for _, temp := range this.client.Topics {
 						if temp == string(topic) {
@@ -129,6 +136,13 @@ func (this *MQTTHandler) process() {
 				}
 				data := msg.(*packet.PublishMessage)
 				log.Printf("publish >> producerId: %v, packetId: %v, topic: %v, payload: %v\n", this.client.Id, data.PacketId(), string(data.Topic()), string(data.Payload()))
+
+				// check topic permission
+				if !this.client.CheckTopicPermission(string(data.Topic()), "publish") {
+					log.Printf("check topic permission failed: publish %v", this.client.Id)
+					this.client.Close()
+					return
+				}
 
 				this.OutChan <- msg
 
@@ -192,7 +206,7 @@ func (this *MQTTHandler) ReadPacket() {
 			this.client.Close()
 			return
 		}
-		for buf[n - 1] >= 0x80 {
+		for buf[n-1] >= 0x80 {
 			n++
 			buf, err = this.client.Br.Peek(n)
 			if err != nil {
@@ -202,7 +216,7 @@ func (this *MQTTHandler) ReadPacket() {
 			}
 		}
 		l, r := binary.Uvarint(buf[1:])
-		buf = make([]byte, int(l) + r + 1)
+		buf = make([]byte, int(l)+r+1)
 		n, err = io.ReadFull(this.client.Br, buf)
 		if err != nil {
 			log.Println("read header", err)
@@ -228,7 +242,7 @@ func (this *MQTTHandler) WritePacket() {
 	for this.client != nil && !this.client.IsClosed {
 		select {
 		case msg := <-this.client.OutChan:
-		// log.Println("send", msg)
+			// log.Println("send", msg)
 			buf := make([]byte, msg.Len())
 			n, err := msg.Encode(buf)
 			if err != nil {
@@ -263,7 +277,7 @@ func (this *MQTTHandler) producer() {
 		select {
 		case msg := <-this.OutChan:
 			data := msg.(*packet.PublishMessage)
-			for _, consumer := range this.cm.CloneMap() {
+			for _, consumer := range this.clientManager.CloneMap() {
 				if consumer == nil || consumer.IsClosed {
 					continue
 				}
