@@ -3,15 +3,15 @@
 FROM golang:latest
 
 # Copy the local package files to the container's workspace.
-ADD . /go/src/meta-server
+ADD . /go/src/meta-broker
 
 # Build the outyet command inside the container.
 # (You may fetch or manage dependencies here,
 # either manually or with a tool like "godep".)
-RUN go install meta-server
+RUN go install meta-broker
 
 # Run the outyet command by default when the container starts.
-ENTRYPOINT /go/bin/meta-server
+ENTRYPOINT /go/bin/meta-broker
 
-# Document that the service listens on port 8080.
+# Document that the service listens on port 1883.
 EXPOSE 1883
