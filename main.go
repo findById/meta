@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"github.com/findById/meta/storage"
 	"fmt"
 	"github.com/findById/meta/broker"
 	"os"
@@ -19,20 +18,6 @@ func main() {
 		flag.PrintDefaults()
 		return
 	}
-
-	err := storage.Save("asdfasdf", storage.Message{
-		ProducerId: "asdfasdf",
-		ConsumerId: "asdfasdf",
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	msg, err := storage.Get("asdfasdf")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(msg)
 
 	meta := broker.NewMetaBroker()
 	meta.Start(*host)
