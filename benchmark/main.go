@@ -17,7 +17,7 @@ var fail_nums int = 0
 
 func main() {
 	//生成连接的客户端数
-	c := flag.Uint64("n", 2, "client nums")
+	c := flag.Uint64("n", 100, "client nums")
 	flag.Parse()
 	nums := int(*c)
 	wg := sync.WaitGroup{}

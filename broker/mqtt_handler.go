@@ -177,7 +177,7 @@ func (h *MQTTHandler) processMessage(msg packet.Message) error {
 		return h.WritePacket(ack)
 	case packet.PUBLISH:
 		data := msg.(*packet.PublishMessage)
-		log.Printf("publish >> producerId: %v, packetId: %v, topic: %v, payload: %v\n", h.Client.Id, data.PacketId(), string(data.Topic()), string(data.Payload()))
+		//log.Printf("publish >> producerId: %v, packetId: %v, topic: %v, payload: %v\n", h.Client.Id, data.PacketId(), string(data.Topic()), string(data.Payload()))
 
 		if !CheckTopicPermission(string(data.Topic()), "publish") {
 			log.Printf("check topic permission failed: publish %v", h.Client.Id)
@@ -244,18 +244,14 @@ func (h *MQTTHandler) processPublishMessage(msg packet.Message) {
 	// 2. 遍历当前服务器上已连接的客户端
 	h.Client.Broker.ClientMap.Range(func(key, value interface{}) bool {
 		c := value.(*MetaClient)
-		//fmt.Println("===consumer ", c.Id, c.Id == key, c.Status, string(data.Topic()))
 		if c.Status != Connected {
 			h.Client.Broker.ClientMap.Delete(key)
 			return true // continue
 		}
 
-		// 3. 遍历当前客户端已订阅的主题
-		c.TopicMap.Range(func(key, value interface{}) bool {
-			if string(data.Topic()) != key {
-				return true // continue
-			}
-
+		// 3. 当前客户端是否已订阅该主题
+		if _, ok := c.TopicMap.Load(string(data.Topic())); ok {
+			//log.Printf("consumer >> consumerId: %v, packetId: %v, topic: %v, qos: %v, payload: %v\n", c.Id, data.PacketId(), string(data.Topic()), temp, string(data.Payload()))
 			// 4. 已订阅主题 缓存消息等待确认接收
 			//jobId := fmt.Sprintf("PUBLISH_%v_%v", h.Client.Id, data.PacketId())
 			//err := storage.Save(jobId, storage.Message{
@@ -283,13 +279,10 @@ func (h *MQTTHandler) processPublishMessage(msg packet.Message) {
 				log.Println("short encode.")
 				return true
 			}
-			if c.WriteBuffer(buf) != nil {
+			if err := c.WriteBuffer(buf); err != nil {
 				c.Close()
 			}
-
-			return true
-		})
-
+		}
 		return true
 	})
 }
