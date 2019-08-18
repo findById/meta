@@ -1,8 +1,8 @@
 package storage
 
 import (
-	"github.com/findById/meta/storage/redis"
 	"encoding/json"
+	"github.com/findById/meta/storage/redis"
 )
 
 type Message struct {
@@ -37,8 +37,7 @@ func Save(key string, message Message) error {
 	if err != nil {
 		return err
 	}
-	storage.Save(key, buf)
-	return nil
+	return storage.Save(key, buf)
 }
 
 func Get(key string) (Message, error) {
@@ -54,6 +53,6 @@ func Get(key string) (Message, error) {
 	return msg, nil
 }
 
-func Remove(key string) {
-	storage.Remove(key)
+func Remove(key string) error {
+	return storage.Remove(key)
 }

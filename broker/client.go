@@ -1,19 +1,20 @@
 package broker
 
 import (
+	"bufio"
+	"context"
+	"errors"
+	"io"
+	"log"
 	"net"
 	"sync"
-	"context"
-	"bufio"
-	"log"
-	"io"
-	"errors"
 	"time"
 )
 
 const (
-	Connected    = 1
-	Disconnected = 2
+	NotAuthorized = 0
+	Connected     = 1
+	Disconnected  = 2
 )
 
 type MetaClient struct {
@@ -38,7 +39,7 @@ func NewMetaClient(conn *net.TCPConn, broker *MetaBroker) *MetaClient {
 		cancelFunc: cancel,
 		Reader:     bufio.NewReader(conn),
 		Writer:     bufio.NewWriter(conn),
-		Status:     Connected,
+		Status:     NotAuthorized,
 	}
 }
 
@@ -77,8 +78,7 @@ func (c MetaClient) WriteBuffer(buf []byte) error {
 		log.Println("short write")
 		return err
 	}
-	err = c.Writer.Flush()
-	if err != nil {
+	if err := c.Writer.Flush(); err != nil {
 		return err
 	}
 	return nil

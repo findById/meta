@@ -28,6 +28,7 @@ func (b *MetaBroker) Start(uri string) {
 	go b.accept(uri)
 
 	go func() {
+		ticker := time.NewTicker(3 * time.Second)
 		for {
 			select {
 			case task, ok := <-b.TaskQueue:
@@ -35,6 +36,8 @@ func (b *MetaBroker) Start(uri string) {
 					continue
 				}
 				task()
+			case <-ticker.C:
+				log.Println("monitor ", runtime.NumGoroutine())
 			}
 		}
 	}()
