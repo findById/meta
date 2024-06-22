@@ -23,28 +23,26 @@ type MetaClient struct {
 	Ctx        context.Context
 	cancelFunc context.CancelFunc
 	Lock       sync.RWMutex
-	Broker     *MetaBroker
 	Reader     *bufio.Reader
 	Writer     *bufio.Writer
 	Status     int
 	TopicMap   sync.Map
 }
 
-func NewMetaClient(conn *net.TCPConn, broker *MetaBroker) *MetaClient {
+func NewMetaClient(conn *net.TCPConn) *MetaClient {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &MetaClient{
 		Conn:       conn,
-		Broker:     broker,
 		Ctx:        ctx,
 		cancelFunc: cancel,
 		Reader:     bufio.NewReader(conn),
-		Writer:     bufio.NewWriter(conn),
+		Writer:     bufio.NewWriter(conn), // bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 		Status:     NotAuthorized,
 	}
 }
 
 // TODO not optimal
-func (c MetaClient) ReadBuffer(size int) ([]byte, error) {
+func (c *MetaClient) ReadBuffer(size int) ([]byte, error) {
 	buf := make([]byte, size)
 	n, err := io.ReadFull(c.Reader, buf)
 	if err != nil {
@@ -58,7 +56,7 @@ func (c MetaClient) ReadBuffer(size int) ([]byte, error) {
 	return buf, nil
 }
 
-func (c MetaClient) WriteBuffer(buf []byte) error {
+func (c *MetaClient) WriteBuffer(buf []byte) error {
 	if c.Status == Disconnected {
 		return nil
 	}
@@ -66,7 +64,6 @@ func (c MetaClient) WriteBuffer(buf []byte) error {
 		return nil
 	}
 	if c.Conn == nil {
-		c.Close()
 		return errors.New("connect lost")
 	}
 	n, err := c.Writer.Write(buf)
@@ -84,7 +81,7 @@ func (c MetaClient) WriteBuffer(buf []byte) error {
 	return nil
 }
 
-func (c MetaClient) Close() {
+func (c *MetaClient) Close() {
 	if c.Status == Disconnected {
 		return
 	}
@@ -93,8 +90,6 @@ func (c MetaClient) Close() {
 	c.cancelFunc()
 	// wait for message complete
 	time.Sleep(1 * time.Second)
-
-	c.Broker.ClientMap.Delete(c.Id)
 
 	if c.Conn != nil {
 		c.Conn.Close()

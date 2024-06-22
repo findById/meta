@@ -1,4 +1,4 @@
-package broker
+package auth
 
 func CheckAuthPermission(username, password []byte) bool {
 	return true

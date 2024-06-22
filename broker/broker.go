@@ -1,12 +1,12 @@
 package broker
 
 import (
-	"sync"
+	"fmt"
+	"log"
 	"net"
 	"net/url"
 	"runtime"
-	"log"
-	"fmt"
+	"sync"
 	"time"
 )
 
@@ -40,6 +40,10 @@ func (b *MetaBroker) Start(uri string) {
 				log.Println("monitor ", runtime.NumGoroutine())
 			}
 		}
+	}()
+
+	go func() {
+		// register node
 	}()
 }
 
@@ -77,8 +81,8 @@ func (b *MetaBroker) accept(uri string) {
 }
 
 func (b *MetaBroker) handleConnection(conn *net.TCPConn) {
-	client := NewMetaClient(conn, b)
+	client := NewMetaClient(conn)
 
-	handler := NewMQTTHandler(client)
+	handler := NewMQTTHandler(b, client)
 	handler.Start()
 }

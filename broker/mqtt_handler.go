@@ -3,18 +3,22 @@ package broker
 import (
 	"encoding/binary"
 	"errors"
-	packet "github.com/surgemq/message"
 	"io"
 	"log"
 	"time"
+
+	"github.com/findById/meta/auth"
+	packet "github.com/surgemq/message"
 )
 
 type MQTTHandler struct {
+	Broker *MetaBroker
 	Client *MetaClient
 }
 
-func NewMQTTHandler(client *MetaClient) *MQTTHandler {
+func NewMQTTHandler(broker *MetaBroker, client *MetaClient) *MQTTHandler {
 	return &MQTTHandler{
+		Broker: broker,
 		Client: client,
 	}
 }
@@ -29,6 +33,7 @@ func (h *MQTTHandler) Start() {
 				msg := packet.NewDisconnectMessage()
 				h.WritePacket(msg)
 				h.Client.Close()
+				h.Broker.ClientMap.Delete(h.Client.Id)
 				return // end loop
 			}
 		}
@@ -99,7 +104,11 @@ func (h *MQTTHandler) WritePacket(msg packet.Message) error {
 		log.Println("short encode.")
 		return err
 	}
-	return h.Client.WriteBuffer(buf)
+	err = h.Client.WriteBuffer(buf)
+	if err != nil {
+		h.Broker.ClientMap.Delete(h.Client.Id)
+	}
+	return err
 }
 
 func (h *MQTTHandler) processMessage(msg packet.Message) error {
@@ -115,7 +124,7 @@ func (h *MQTTHandler) processMessage(msg packet.Message) error {
 		log.Println(string(data.Username()), string(data.Password()), data.Version())
 
 		// check permission
-		if !CheckAuthPermission(data.Username(), data.Password()) {
+		if !auth.CheckAuthPermission(data.Username(), data.Password()) {
 			ack := packet.NewConnackMessage()
 			//ack.SetPacketId(msg.PacketId())
 			ack.SetReturnCode(packet.ErrNotAuthorized)
@@ -128,7 +137,7 @@ func (h *MQTTHandler) processMessage(msg packet.Message) error {
 		h.Client.Conn.SetDeadline(time.Now().Add(time.Minute))
 
 		// 保存当前客户端连接
-		h.Client.Broker.ClientMap.Store(h.Client.Id, h.Client)
+		h.Broker.ClientMap.Store(h.Client.Id, h.Client)
 
 		ack := packet.NewConnackMessage()
 		//ack.SetPacketId(msg.PacketId())
@@ -139,7 +148,7 @@ func (h *MQTTHandler) processMessage(msg packet.Message) error {
 		//log.Println(data.String(), data.Qos())
 
 		for _, topic := range data.Topics() {
-			if !CheckTopicPermission(string(topic), "subscribe") {
+			if !auth.CheckTopicPermission(string(topic), "subscribe") {
 				return errors.New("permission denied")
 			}
 			// store topic
@@ -161,7 +170,7 @@ func (h *MQTTHandler) processMessage(msg packet.Message) error {
 		data := msg.(*packet.UnsubscribeMessage)
 
 		for _, topic := range data.Topics() {
-			if !CheckTopicPermission(string(topic), "unsubscribe") {
+			if !auth.CheckTopicPermission(string(topic), "unsubscribe") {
 				return errors.New("permission denied")
 			}
 			// delete topic
@@ -179,14 +188,14 @@ func (h *MQTTHandler) processMessage(msg packet.Message) error {
 		data := msg.(*packet.PublishMessage)
 		//log.Printf("publish >> producerId: %v, packetId: %v, topic: %v, payload: %v\n", h.Client.Id, data.PacketId(), string(data.Topic()), string(data.Payload()))
 
-		if !CheckTopicPermission(string(data.Topic()), "publish") {
+		if !auth.CheckTopicPermission(string(data.Topic()), "publish") {
 			log.Printf("check topic permission failed: publish %v", h.Client.Id)
 			return errors.New("permission denied")
 		}
 
 		// 消息下发逻辑
 		// worker queue process message
-		h.Client.Broker.Worker(func() {
+		h.Broker.Worker(func() {
 			h.processPublishMessage(msg)
 		})
 
@@ -207,6 +216,7 @@ func (h *MQTTHandler) processMessage(msg packet.Message) error {
 		return h.WritePacket(ack)
 	case packet.DISCONNECT:
 		h.Client.Close()
+		h.Broker.ClientMap.Delete(h.Client.Id)
 		break
 	default:
 		return errors.New("unimplemented message type")
@@ -242,10 +252,10 @@ func (h *MQTTHandler) processPublishMessage(msg packet.Message) {
 	//}
 
 	// 2. 遍历当前服务器上已连接的客户端
-	h.Client.Broker.ClientMap.Range(func(key, value interface{}) bool {
+	h.Broker.ClientMap.Range(func(key, value interface{}) bool {
 		c := value.(*MetaClient)
 		if c.Status != Connected {
-			h.Client.Broker.ClientMap.Delete(key)
+			h.Broker.ClientMap.Delete(key)
 			return true // continue
 		}
 
@@ -281,6 +291,7 @@ func (h *MQTTHandler) processPublishMessage(msg packet.Message) {
 			}
 			if err := c.WriteBuffer(buf); err != nil {
 				c.Close()
+				h.Broker.ClientMap.Delete(h.Client.Id)
 			}
 		}
 		return true

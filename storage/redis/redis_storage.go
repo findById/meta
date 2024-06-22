@@ -1,8 +1,8 @@
 package redis
 
 import (
+	"errors"
 	"fmt"
-	"qiniupkg.com/x/errors.v7"
 )
 
 var data = make(map[string][]byte, 0)

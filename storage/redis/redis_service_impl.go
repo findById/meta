@@ -3,13 +3,14 @@ package redis
 import (
 	"fmt"
 	"log"
-	"github.com/garyburd/redigo/redis"
 	"time"
-	"github.com/findById/doweidu/config"
+
+	"github.com/findById/meta/config"
+	"github.com/garyburd/redigo/redis"
 )
 
 const (
-	KeyPublish    = "publish:msg:%v:%v"
+	KeyPublish = "publish:msg:%v:%v"
 )
 
 var (

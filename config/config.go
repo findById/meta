@@ -2,10 +2,10 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"runtime"
-	"fmt"
 	"strconv"
 )
 
@@ -61,7 +61,7 @@ func ParseConfig(path string) error {
 	}
 	defer file.Close()
 	dec := json.NewDecoder(file)
-	dec.Decode(&conf)
+	err = dec.Decode(&conf)
 	if err != nil {
 		log.Println("decode config", err)
 		return err
