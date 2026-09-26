@@ -1,17 +1,14 @@
-# Start from a Debian image with the latest version of Go installed
-# and a workspace (GOPATH) configured at /go.
-FROM golang:latest
+FROM golang:1.25 AS builder
 
-# Copy the local package files to the container's workspace.
-ADD . /go/src/meta-broker
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /out/meta-broker ./cmd/meta-broker
 
-# Build the outyet command inside the container.
-# (You may fetch or manage dependencies here,
-# either manually or with a tool like "godep".)
-RUN go install meta-broker
+FROM gcr.io/distroless/static-debian12:nonroot
 
-# Run the outyet command by default when the container starts.
-ENTRYPOINT /go/bin/meta-broker
+COPY --from=builder /out/meta-broker /meta-broker
 
-# Document that the service listens on port 1883.
 EXPOSE 1883
+ENTRYPOINT ["/meta-broker"]

@@ -1,0 +1,21 @@
+/.idea/
+/.vscode/
+/.DS_Store
+
+# Build artifacts
+/bin/
+/dist/
+/meta-broker
+/meta-admin
+*.test
+*.out
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Local-only configuration
+/admin/config.local.json
+/config.local.json

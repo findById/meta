@@ -1,0 +1,23 @@
+{
+  "token": "change-me",
+  "devices": [
+    {
+      "id": "demo-mqtt3",
+      "protocol": "mqtt-3.1.1",
+      "username": "demo-user",
+      "password": "demo-password",
+      "enabled": true
+    },
+    {
+      "id": "demo-mqtt5",
+      "protocol": "mqtt-5.0",
+      "username": "demo-user",
+      "password": "demo-password",
+      "enabled": true
+    }
+  ],
+  "acls": [
+    {"clientId": "demo-mqtt3", "topicFilter": "#", "action": "*"},
+    {"clientId": "demo-mqtt5", "topicFilter": "#", "action": "*"}
+  ]
+}
